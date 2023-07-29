@@ -5,9 +5,18 @@ import matplotlib
 from sys import platform
 import time
 import mne
+import os
+from dotenv import load_dotenv
+from google.cloud import storage
 
 from brainaccess.utils import acquisition
 from brainaccess.core.eeg_manager import EEGManager
+
+# Load environment variables
+load_dotenv()
+
+# Get environment variables
+com_port = os.getenv('COM_PORT')
 
 matplotlib.use("TKAgg", force=True)
 
@@ -25,6 +34,27 @@ channel_mapping = {
     5: "AF8"
 }
 
+def upload_to_firebase(file_path):
+    # Your Firebase project ID
+    project_id = os.getenv('FIREBASE_PROJECT_ID')
+
+    # Create a storage client
+    storage_client = storage.Client(project_id)
+
+    # The "bucket" in Firebase Storage is named the same as your Firebase project ID
+    bucket_name = os.getenv('FIREBASE_STORAGE_BUCKET')
+    bucket = storage_client.get_bucket(bucket_name)
+
+    # Name of the file in Firebase Storage (can be the same as the local file name)
+    firebase_file_name = file_path.split('/')[-1]
+
+    # Create a new blob and upload the file's content
+    blob = bucket.blob(firebase_file_name)
+    blob.upload_from_filename(file_path)
+
+    # The public URL can be used to directly access the uploaded file via HTTP
+    return blob.public_url
+
 @app.route('/annotate', methods=['POST'])
 def annotate():
     annotation = request.json.get('annotation')
@@ -39,11 +69,6 @@ def start():
     global user_id  # Declare user_id as a global variable so it can be accessed in the stop endpoint
     user_id = request.json.get('user_id')
     if user_id:
-        # Set correct Bluetooth port for windows or linux
-        if platform == "linux" or platform == "linux2":
-            eeg.setup(mgr, port='/dev/rfcomm0', cap=channel_mapping)
-        else:
-            eeg.setup(mgr, port='COM3', cap=channel_mapping)
         # Start acquiring data
         eeg.start_acquisition()
         return {'status': 'success'}, 200
@@ -57,17 +82,19 @@ def stop():
     eeg.stop_acquisition()
     mgr.disconnect()
 
-    # Save user id in the MNE dataset
-    eeg.data.mne_raw.info['subject_info'] = {'user_id': user_id}
-
     # save EEG data to MNE fif format
-    eeg.data.save(f'{time.strftime("%Y%m%d_%H%M")}-raw.fif')
+    file_name = f'{time.strftime("%Y%m%d_%H%M")}-raw.fif'
+    eeg.data.save(file_name)
+
+    # Upload the file to Firebase and print the public URL
+    public_url = upload_to_firebase(file_name)
+    print(f'File uploaded to: {public_url}')
+
     # Close brainaccess library
     eeg.close()
     # Show recorded data
     show_recorded_data()
     return {'status': 'success'}, 200
-
 
 def show_recorded_data():
     eeg.data.mne_raw.filter(0.5, 30)
@@ -75,25 +102,13 @@ def show_recorded_data():
     fig = eeg.data.mne_raw.plot(scalings='auto', verbose=False, events=events)
     fig.subplots_adjust(top=0.9)  # make room for title
     fig.suptitle(f'Participant: {user_id}', size='xx-large', weight='bold')
-
-    # Get the axes from the figure
-    axes = fig.get_axes()
-
-    # Print all events and add vertical lines
-    for event in events:
-        for description, id in event_id.items():
-            if id == event[2]:
-                print(f'Timestamp: {event[0]}, Annotation: {description}')
-                # Add a vertical line at the timestamp of the event
-                # Note: event[0] is in samples, so we convert it to seconds by dividing by the sampling rate
-                for ax in axes:
-                    ax.axvline(event[0] / eeg.data.mne_raw.info['sfreq'], color='r', linestyle='--')
-
     plt.savefig(f'{time.strftime("%Y%m%d_%H%M")}-plot.png')
-
 
 def start_flask_app():
     app.run(host='0.0.0.0', port=5000)
+
+# Set correct Bluetooth port for windows or linux
+eeg.setup(mgr, port=com_port, cap=channel_mapping)
 
 # Start the Flask app in a separate thread
 flask_thread = threading.Thread(target=start_flask_app)
@@ -101,3 +116,4 @@ flask_thread = threading.Thread(target=start_flask_app)
 flask_thread.start()
 
 flask_thread.join()
+
