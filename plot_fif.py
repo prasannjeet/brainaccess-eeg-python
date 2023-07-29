@@ -16,6 +16,15 @@ if raw.info['subject_info'] is not None:
 # Get the events from annotations
 events, event_id = mne.events_from_annotations(raw)
 
+# Get the start timestamp
+start_timestamp = raw.info.get('start_timestamp')
+
+# Print the start timestamp
+if start_timestamp:
+    print(f'Start Timestamp: {start_timestamp}')
+else:
+    print('Start timestamp not found in the file.')
+
 # Plot the data
 fig = raw.plot(scalings='auto', verbose=False, events=events)
 fig.subplots_adjust(top=0.9)  # make room for title

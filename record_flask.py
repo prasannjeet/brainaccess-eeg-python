@@ -7,16 +7,31 @@ import time
 import mne
 import os
 from dotenv import load_dotenv
-from google.cloud import storage
+import firebase_admin
+from firebase_admin import credentials, storage
+from datetime import datetime
+from flask_cors import CORS
 
 from brainaccess.utils import acquisition
 from brainaccess.core.eeg_manager import EEGManager
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS globally
 
 # Load environment variables
 load_dotenv()
 
 # Get environment variables
 com_port = os.getenv('COM_PORT')
+
+# Path to the credentials.json file
+cred_path = 'credentials.json'
+
+# Initialize Firebase Admin SDK with the credentials file
+cred = credentials.Certificate(cred_path)
+firebase_admin.initialize_app(cred, {
+    'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET')
+})
 
 matplotlib.use("TKAgg", force=True)
 
@@ -35,21 +50,14 @@ channel_mapping = {
 }
 
 def upload_to_firebase(file_path):
-    # Your Firebase project ID
-    project_id = os.getenv('FIREBASE_PROJECT_ID')
+    # Use the user_id as the filename in Firebase Storage
+    firebase_file_name = f'{user_id}-raw.fif'
 
-    # Create a storage client
-    storage_client = storage.Client(project_id)
-
-    # The "bucket" in Firebase Storage is named the same as your Firebase project ID
-    bucket_name = os.getenv('FIREBASE_STORAGE_BUCKET')
-    bucket = storage_client.get_bucket(bucket_name)
-
-    # Name of the file in Firebase Storage (can be the same as the local file name)
-    firebase_file_name = file_path.split('/')[-1]
-
-    # Create a new blob and upload the file's content
+    # Create a storage reference
+    bucket = storage.bucket()
     blob = bucket.blob(firebase_file_name)
+
+    # Upload the file
     blob.upload_from_filename(file_path)
 
     # The public URL can be used to directly access the uploaded file via HTTP
@@ -66,11 +74,12 @@ def annotate():
 
 @app.route('/start', methods=['POST'])
 def start():
-    global user_id  # Declare user_id as a global variable so it can be accessed in the stop endpoint
+    global user_id, start_timestamp  # Declare start_timestamp as a global variable
     user_id = request.json.get('user_id')
     if user_id:
         # Start acquiring data
         eeg.start_acquisition()
+        start_timestamp = datetime.now()  # Save the current timestamp
         return {'status': 'success'}, 200
     else:
         return {'status': 'failure', 'error': 'No user id provided'}, 400
@@ -81,6 +90,9 @@ def stop():
     eeg.get_mne()
     eeg.stop_acquisition()
     mgr.disconnect()
+
+    # Add the start timestamp as a custom annotation
+    eeg.data.mne_raw.info['start_timestamp'] = start_timestamp
 
     # save EEG data to MNE fif format
     file_name = f'{time.strftime("%Y%m%d_%H%M")}-raw.fif'
@@ -99,10 +111,26 @@ def stop():
 def show_recorded_data():
     eeg.data.mne_raw.filter(0.5, 30)
     events, event_id = mne.events_from_annotations(eeg.data.mne_raw)
-    fig = eeg.data.mne_raw.plot(scalings='auto', verbose=False, events=events)
+    fig = eeg.data.mne_raw.plot(scalings='auto', verbose=False, events=events, show=False)
     fig.subplots_adjust(top=0.9)  # make room for title
     fig.suptitle(f'Participant: {user_id}', size='xx-large', weight='bold')
-    plt.savefig(f'{time.strftime("%Y%m%d_%H%M")}-plot.png')
+
+    # Get the axes from the figure
+    axes = fig.get_axes()
+
+    # Print all events and add vertical lines
+    for event in events:
+        for description, id in event_id.items():
+            if id == event[2]:
+                print(f'Timestamp: {event[0]}, Annotation: {description}')
+                # Add a vertical line at the timestamp of the event
+                # Note: event[0] is in samples, so we convert it to seconds by dividing by the sampling rate
+                for ax in axes:
+                    ax.axvline(event[0] / eeg.data.mne_raw.info['sfreq'], color='r', linestyle='--')
+
+    file_path = f'{time.strftime("%Y%m%d_%H%M")}-plot.png'
+    plt.savefig(file_path)
+    plt.close(fig)  # Close the plot
 
 def start_flask_app():
     app.run(host='0.0.0.0', port=5000)
