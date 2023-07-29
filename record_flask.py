@@ -11,9 +11,13 @@ import firebase_admin
 from firebase_admin import credentials, storage
 from datetime import datetime
 from flask_cors import CORS
+import requests
 
 from brainaccess.utils import acquisition
 from brainaccess.core.eeg_manager import EEGManager
+
+# Global variable to store JWT token
+jwt_token = None
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS globally
@@ -74,8 +78,9 @@ def annotate():
 
 @app.route('/start', methods=['POST'])
 def start():
-    global user_id, start_timestamp  # Declare start_timestamp as a global variable
+    global user_id, start_timestamp, jwt_token  # Declare jwt_token as a global variable
     user_id = request.json.get('user_id')
+    jwt_token = request.json.get('jwt_token')  # Get JWT token from the request
     if user_id:
         # Start acquiring data
         eeg.start_acquisition()
@@ -95,12 +100,19 @@ def stop():
     eeg.data.mne_raw.info['start_timestamp'] = start_timestamp
 
     # save EEG data to MNE fif format
-    file_name = f'{time.strftime("%Y%m%d_%H%M")}-raw.fif'
+    file_name = f'{user_id}-raw.fif'
     eeg.data.save(file_name)
 
     # Upload the file to Firebase and print the public URL
     public_url = upload_to_firebase(file_name)
     print(f'File uploaded to: {public_url}')
+
+    # Send the URL to the Spring server
+    spring_url = os.getenv('SPRING_URL')
+    headers = {'Authorization': f'Bearer {jwt_token}'}  # Include JWT token in the header
+    response = requests.post(f'{spring_url}/users/{user_id}/fifUrl', json={"fifUrl": public_url}, headers=headers)
+    if response.status_code != 200:
+        print(f'Error sending fifUrl to Spring server: {response.text}')
 
     # Close brainaccess library
     eeg.close()
@@ -128,7 +140,7 @@ def show_recorded_data():
                 for ax in axes:
                     ax.axvline(event[0] / eeg.data.mne_raw.info['sfreq'], color='r', linestyle='--')
 
-    file_path = f'{time.strftime("%Y%m%d_%H%M")}-plot.png'
+    file_path = f'{user_id}-plot.png'
     plt.savefig(file_path)
     plt.close(fig)  # Close the plot
 
