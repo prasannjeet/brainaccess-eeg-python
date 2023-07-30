@@ -39,8 +39,6 @@ firebase_admin.initialize_app(cred, {
 
 matplotlib.use("TKAgg", force=True)
 
-app = Flask(__name__)
-
 # Move the eeg object to the global scope so it can be accessed by the Flask route
 eeg = acquisition.EEG()
 mgr = EEGManager()
@@ -63,6 +61,9 @@ def upload_to_firebase(file_path):
 
     # Upload the file
     blob.upload_from_filename(file_path)
+
+    # Make the blob publicly readable
+    blob.make_public()
 
     # The public URL can be used to directly access the uploaded file via HTTP
     return blob.public_url
@@ -97,7 +98,7 @@ def stop():
     mgr.disconnect()
 
     # Add the start timestamp as a custom annotation
-    eeg.data.mne_raw.info['start_timestamp'] = start_timestamp
+    eeg.data.mne_raw.info['temp'] = {'start_timestamp': start_timestamp}
 
     # save EEG data to MNE fif format
     file_name = f'{user_id}-raw.fif'
