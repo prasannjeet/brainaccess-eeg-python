@@ -320,3 +320,8 @@ pip-selfcheck.json
 # End of https://www.toptal.com/developers/gitignore/api/python,venv,pycharm,visualstudiocode
 
 credentials.json
+credentials_backup.json
+
+*.fif
+backup/
+backup/*

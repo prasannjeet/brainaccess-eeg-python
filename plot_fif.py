@@ -2,7 +2,7 @@ import mne
 import matplotlib.pyplot as plt
 
 # Load the data
-file_path = 'C:\\Users\\Prasannjeet\\Documents\\Project\\20230729_1622-raw.fif'
+file_path = 'C:\\Users\\Prasannjeet\\Documents\\Project\\test.fif'
 raw = mne.io.read_raw_fif(file_path, preload=True)
 
 # Filter the data
