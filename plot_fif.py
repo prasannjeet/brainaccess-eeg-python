@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Load the data
-file_path = 'C:\\Users\\Prasannjeet\\Documents\\Project\\test-6.fif'
+file_path = 'eeg.fif'
 raw = mne.io.read_raw_fif(file_path, preload=True)
 
 raw.drop_channels(['Accel_x', 'Accel_y', 'Accel_z', 'Digital', 'Sample'])
