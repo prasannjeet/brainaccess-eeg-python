@@ -1,9 +1,19 @@
 import mne
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Load the data
-file_path = 'C:\\Users\\Prasannjeet\\Documents\\Project\\test.fif'
+file_path = 'C:\\Users\\Prasannjeet\\Documents\\Project\\test-6.fif'
 raw = mne.io.read_raw_fif(file_path, preload=True)
+
+raw.drop_channels(['Accel_x', 'Accel_y', 'Accel_z', 'Digital', 'Sample'])
+
+# Define a function to remove the mean (baseline)
+def remove_mean(x):
+    return x - np.mean(x)
+
+# Apply the function
+raw.apply_function(remove_mean, picks='eeg')
 
 # Filter the data
 raw.filter(0.5, 30)
@@ -12,6 +22,12 @@ raw.filter(0.5, 30)
 participant_name = None
 if raw.info['subject_info'] is not None:
     participant_name = raw.info['subject_info'].get('user_id', 'Unknown')
+
+# start_timestamp = raw.info['temp']['start_timestamp']
+# if start_timestamp:
+#     print(f"Start Timestamp: {start_timestamp}")
+# else:
+#     print("Start Timestamp not found in the EEG data file.")
 
 # Get the events from annotations
 events, event_id = mne.events_from_annotations(raw)

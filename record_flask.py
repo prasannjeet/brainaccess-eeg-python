@@ -47,11 +47,11 @@ eeg = acquisition.EEG()
 mgr = EEGManager()
 channel_mapping = {
     0: "F4",
-    1: "F8",
-    2: "F7",
-    3: "F3",
-    4: "AF7",
-    5: "AF8"
+    1: "F6",
+    2: "F5",
+    4: "F3",
+    5: "FC2",
+    6: "FC1"
 }
 
 def upload_to_firebase(file_bytes, file_name, content_type):
@@ -85,7 +85,7 @@ def start():
     if user_id:
         # Start acquiring data
         eeg.start_acquisition()
-        start_timestamp = datetime.now()  # Save the current timestamp
+        start_timestamp = datetime.now().isoformat()  # Save the current timestamp
         return {'status': 'success'}, 200
     else:
         return {'status': 'failure', 'error': 'No user id provided'}, 400
@@ -123,9 +123,10 @@ def stop():
     # Send the URLs to the Spring server
     spring_url = os.getenv('SPRING_URL')
     headers = {'Authorization': f'Bearer {jwt_token}'}  # Include JWT token in the header
-    response = requests.post(f'{spring_url}/users/{user_id}/fifUrl', json={"fifUrl": fif_url, "imageUrl": image_url}, headers=headers)
+    response = requests.post(f'{spring_url}/users/{user_id}/fifUrl', json={"fifUrl": fif_url, "imageUrl": image_url, "startTime": start_timestamp}, headers=headers) # Include start_timestamp
     if response.status_code != 200:
         print(f'Error sending URLs to Spring server: {response.text}')
+
 
     # Close brainaccess library
     eeg.close()
