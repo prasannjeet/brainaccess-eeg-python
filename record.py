@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 from sys import platform
 import time
+import numpy as np
 
 from brainaccess.utils import acquisition
 from brainaccess.core.eeg_manager import EEGManager
@@ -20,12 +21,14 @@ eeg = acquisition.EEG()
 # Define your own channel mapping
 channel_mapping = {
     0: "F4",
-    1: "F8",
-    2: "F7",
-    3: "F3",
-    4: "AF7",
-    5: "AF8"
+    1: "F6",
+    2: "F5",
+    4: "F3",
+    6: "FC1",
+    7: "FC2"
 }
+
+# bias_channels = [5]
 
 with EEGManager() as mgr:
     # Set correct Bluetooth port for windows or linux
@@ -37,7 +40,7 @@ with EEGManager() as mgr:
     eeg.start_acquisition()
 
     start_time = time.time()
-    while time.time()-start_time < 20:  # Changed from 10 seconds to 300 seconds
+    while time.time()-start_time < 30:  # Changed from 10 seconds to 300 seconds
         print('annotating eeg data')
         time.sleep(1)
         # send annotation to the device
@@ -53,5 +56,16 @@ eeg.data.save(f'{time.strftime("%Y%m%d_%H%M")}-raw.fif')
 # Close brainaccess library
 eeg.close()
 # Show recorded data
+
+# Other filters
+eeg.data.mne_raw.drop_channels(['Accel_x', 'Accel_y', 'Accel_z', 'Digital', 'Sample'])
+
+# Define a function to remove the mean (baseline)
+def remove_mean(x):
+    return x - np.mean(x)
+
+# Apply the function
+eeg.data.mne_raw.apply_function(remove_mean, picks='eeg')
+
 eeg.data.mne_raw.filter(0.5, 30).plot(scalings='auto', verbose=False)
 plt.show()
