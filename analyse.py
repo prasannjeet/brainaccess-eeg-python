@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import List
 
+# Load environment variables
+load_dotenv()
 
 class AudioData:
     def __init__(self, questionId, audioUrl, start):
@@ -85,10 +87,21 @@ def main():
     for user_data in user_data_list:
         save_files(user_data)
 
-    user_data_dicts = [user_data.to_dict() for user_data in user_data_list]
-    pretty_json = json.dumps(user_data_dicts, indent=4)
-    print(pretty_json)
-    print("Done")
+    # user_data_dicts = [user_data.to_dict() for user_data in user_data_list]
+    # pretty_json = json.dumps(user_data_dicts, indent=4)
+    # print(pretty_json)
+    print("Fetched all data from the API. Done")
+
+
+def fetch_user_data():
+    token = get_access_token()
+    return get_user_data(token)
+
+
+def fetch_first_user_fif_blob():
+    user_data_list = fetch_user_data()
+    first_user_data = user_data_list[0]
+    return first_user_data.fifFileBlob
 
 
 if __name__ == "__main__":

@@ -323,5 +323,14 @@ credentials.json
 credentials_backup.json
 
 *.fif
+*.mp3
 backup/
 backup/*
+
+old_data/*
+.DS_Store/*
+.DS_Store
+/*/.DS_Store
+# All .DS_Store folder and contained files
+**/.DS_Store
+**/.DS_Store/*
