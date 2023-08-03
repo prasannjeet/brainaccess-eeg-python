@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Load the data
-file_path = 'C:\\Users\\Prasannjeet\\Documents\\Project\\test-6.fif'
+file_path = '7558f0eb-0970-4c8d-84db-85616feb82c3.fif'
 raw = mne.io.read_raw_fif(file_path, preload=True)
 
 raw.drop_channels(['Accel_x', 'Accel_y', 'Accel_z', 'Digital', 'Sample'])
@@ -33,18 +33,18 @@ if raw.info['subject_info'] is not None:
 events, event_id = mne.events_from_annotations(raw)
 
 # Get the start timestamp
-start_timestamp = raw.info.get('start_timestamp')
+# start_timestamp = raw.info.get('start_timestamp')
 
 # Print the start timestamp
-if start_timestamp:
-    print(f'Start Timestamp: {start_timestamp}')
-else:
-    print('Start timestamp not found in the file.')
+# if start_timestamp:
+#     print(f'Start Timestamp: {start_timestamp}')
+# else:
+#     print('Start timestamp not found in the file.')
 
 # Plot the data
 fig = raw.plot(scalings='auto', verbose=False, events=events)
-fig.subplots_adjust(top=0.9)  # make room for title
-fig.suptitle(f'Participant: {participant_name}', size='xx-large', weight='bold')
+# fig.subplots_adjust(top=0.9)  # make room for title
+# fig.suptitle(f'Participant: {participant_name}', size='xx-large', weight='bold')
 
 # Get the axes from the figure
 axes = fig.get_axes()
