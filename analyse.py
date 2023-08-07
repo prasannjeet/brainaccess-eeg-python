@@ -1,13 +1,12 @@
 import os
+from urllib.parse import urlencode
+
 import requests
 from dotenv import load_dotenv
-from urllib.parse import urlencode
-import json
-from dataclasses import dataclass
-from typing import List
 
 # Load environment variables
 load_dotenv()
+
 
 class AudioData:
     def __init__(self, questionId, audioUrl, start):
@@ -102,6 +101,12 @@ def fetch_first_user_fif_blob():
     user_data_list = fetch_user_data()
     first_user_data = user_data_list[0]
     return first_user_data.fifFileBlob
+
+
+def fetch_first_user_audio():
+    user_data_list = fetch_user_data()
+    first_user_data = user_data_list[0]
+    return [audio_data.audioBlob for audio_data in first_user_data.audio]
 
 
 if __name__ == "__main__":
