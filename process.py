@@ -1,9 +1,13 @@
 import io
-import numpy as np
+
 import matplotlib.pyplot as plt
 import mne
+import numpy as np
+from pydub import AudioSegment
 from scipy.io import wavfile
-from analyse import fetch_first_user_fif_blob, fetch_first_user_audio
+from scipy.signal import spectrogram
+
+from fetch_data import fetch_first_user_fif_blob, fetch_first_user_audio
 from utilities import preprocess_raw_data, add_plot_title
 
 # Fetch the FIF blob of the first user
@@ -98,3 +102,42 @@ for i, (data, times) in enumerate(data_array):
 plt.tight_layout()
 plt.show()
 
+# Fetch the audio blobs
+audio_blobs = fetch_first_user_audio()
+
+# Extract data from each segment and plot EEG data along with the audio spectrogram
+fig, axs = plt.subplots(len(q_r_pairs) * 2, 1,
+                        figsize=(10, 8 * len(q_r_pairs)))  # Adjusted to accommodate the spectrograms
+
+for i, (q_time, r_time) in enumerate(q_r_pairs):
+    raw_segment = raw.copy().crop(tmin=q_time, tmax=r_time).load_data()
+
+    # Extract data and times for the EEG segment
+    data, times = raw_segment[:, :]
+
+    # Plot EEG data
+    for j, channel_data in enumerate(data):
+        axs[i * 2].plot(times, channel_data, label=raw.ch_names[j])
+    axs[i * 2].set_title(f"Segment {i}: {q_r_pairs[i][0]} to {q_r_pairs[i][1]}")
+    axs[i * 2].legend(loc="upper right")
+
+    # Convert audio blob to WAV format using pydub
+    audio_segment = AudioSegment.from_mp3(io.BytesIO(audio_blobs[i]))
+    audio_buffer = io.BytesIO()
+    audio_segment.export(audio_buffer, format="wav")
+    audio_buffer.seek(0)  # Reset buffer position
+
+    # Now read the WAV data
+    audio_rate, audio_data = wavfile.read(audio_buffer)
+
+    # Compute the spectrogram
+    frequencies, times, Sxx = spectrogram(audio_data, fs=audio_rate)
+
+    # Plot the spectrogram
+    axs[i * 2 + 1].pcolormesh(times, frequencies, 10 * np.log10(Sxx), shading='gouraud')
+    axs[i * 2 + 1].set_ylabel('Frequency [Hz]')
+    axs[i * 2 + 1].set_xlabel('Time [sec]')
+    axs[i * 2 + 1].set_title(f"Audio Spectrogram for Segment {i}")
+
+plt.tight_layout()
+plt.show()

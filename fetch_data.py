@@ -1,11 +1,58 @@
+import io
 import os
 from urllib.parse import urlencode
 
+import noisereduce as nr
+import numpy as np
 import requests
 from dotenv import load_dotenv
+from pydub import AudioSegment
+from pydub.silence import split_on_silence
+from scipy.signal import butter, lfilter
 
 # Load environment variables
 load_dotenv()
+
+
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = lfilter(b, a, data)
+    return y
+
+
+def clean_audio_blob(audio_blob):
+    # Convert audio blob to AudioSegment
+    audio_segment = AudioSegment.from_mp3(io.BytesIO(audio_blob))
+
+    # Noise Reduction
+    audio_data = np.array(audio_segment.get_array_of_samples())
+    cleaned_audio = nr.reduce_noise(y=audio_data, sr=audio_segment.frame_rate)
+
+    # Filtering
+    cleaned_audio = butter_bandpass_filter(cleaned_audio, 80, 250, audio_segment.frame_rate)
+
+    # Normalization
+    cleaned_audio = cleaned_audio / np.max(np.abs(cleaned_audio), axis=0)
+
+    # Silence Removal
+    audio_segment = AudioSegment(cleaned_audio.tobytes(), frame_rate=audio_segment.frame_rate,
+                                 sample_width=audio_segment.sample_width, channels=audio_segment.channels)
+    chunks = split_on_silence(audio_segment, min_silence_len=500, silence_thresh=-40)
+    cleaned_audio_segment = sum(chunks)
+
+    # Convert back to blob
+    audio_buffer = io.BytesIO()
+    cleaned_audio_segment.export(audio_buffer, format="mp3")
+
+    return audio_buffer.getvalue()
 
 
 class AudioData:
@@ -13,6 +60,9 @@ class AudioData:
         self.questionId = questionId
         self.audioUrl = audioUrl
         self.start = start
+        # For filtering audio blob use below 2 lines
+        # raw_audio_blob = requests.get(audioUrl).content
+        # self.audioBlob = clean_audio_blob(raw_audio_blob)
         self.audioBlob = requests.get(audioUrl).content
 
     def __str__(self):
