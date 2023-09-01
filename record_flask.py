@@ -29,7 +29,8 @@ CORS(app)  # Enable CORS globally
 load_dotenv()
 
 # Get environment variables
-com_port = os.getenv('COM_PORT')
+com_port = os.getenv('COM_PORT_WINDOWS')
+com_port_linux = os.getenv('COM_PORT_LINUX')
 
 # Path to the credentials.json file
 cred_path = 'credentials.json'
@@ -45,14 +46,10 @@ matplotlib.use("TKAgg", force=True)
 # Move the eeg object to the global scope so it can be accessed by the Flask route
 eeg = acquisition.EEG()
 mgr = EEGManager()
-channel_mapping = {
-    0: "F4",
-    1: "F6",
-    2: "F5",
-    4: "F3",
-    5: "FC2",
-    6: "FC1"
-}
+
+channel_mapping_str = os.getenv('CHANNEL_MAPPING')
+channel_mapping = {int(k): v for k, v in (x.split(':') for x in channel_mapping_str.split(','))}
+
 
 def upload_to_firebase(file_bytes, file_name, content_type):
     # Create a storage reference
@@ -68,6 +65,7 @@ def upload_to_firebase(file_bytes, file_name, content_type):
     # The public URL can be used to directly access the uploaded file via HTTP
     return blob.public_url + "?timestamp=" + str(time.time())
 
+
 @app.route('/annotate', methods=['POST'])
 def annotate():
     annotation = request.json.get('annotation')
@@ -76,6 +74,7 @@ def annotate():
         return {'status': 'success'}, 200
     else:
         return {'status': 'failure', 'error': 'No annotation provided'}, 400
+
 
 @app.route('/start', methods=['POST'])
 def start():
@@ -89,6 +88,7 @@ def start():
         return {'status': 'success'}, 200
     else:
         return {'status': 'failure', 'error': 'No user id provided'}, 400
+
 
 @app.route('/stop', methods=['POST'])
 def stop():
@@ -123,10 +123,11 @@ def stop():
     # Send the URLs to the Spring server
     spring_url = os.getenv('SPRING_URL')
     headers = {'Authorization': f'Bearer {jwt_token}'}  # Include JWT token in the header
-    response = requests.post(f'{spring_url}/users/{user_id}/fifUrl', json={"fifUrl": fif_url, "imageUrl": image_url, "startTime": start_timestamp}, headers=headers) # Include start_timestamp
+    response = requests.post(f'{spring_url}/users/{user_id}/fifUrl',
+                             json={"fifUrl": fif_url, "imageUrl": image_url, "startTime": start_timestamp},
+                             headers=headers)  # Include start_timestamp
     if response.status_code != 200:
         print(f'Error sending URLs to Spring server: {response.text}')
-
 
     # Close brainaccess library
     eeg.close()
@@ -136,14 +137,16 @@ def stop():
 
     return {'status': 'success'}, 200
 
+
 def show_recorded_data():
     # Pre-process the EEG data
     eeg.data.mne_raw.drop_channels(['Accel_x', 'Accel_y', 'Accel_z', 'Digital', 'Sample'])  # Remove unwanted channels
+
     # Define a function to remove the mean (baseline)
 
     def remove_mean(x):
         return x - np.mean(x)
-    
+
     # Apply the function
     eeg.data.mne_raw.apply_function(remove_mean, picks='eeg')
     eeg.data.mne_raw.filter(0.5, 30)
@@ -174,16 +177,21 @@ def show_recorded_data():
 
     return plot_bytes
 
+
 def start_flask_app():
     app.run(host='0.0.0.0', port=5000)
 
+
 # Set correct Bluetooth port for windows or linux
-eeg.setup(mgr, port=com_port, cap=channel_mapping)
+if platform == "linux" or platform == "linux2":
+    eeg.setup(mgr, port=com_port_linux, cap=channel_mapping)
+else:
+    eeg.setup(mgr, port=com_port, cap=channel_mapping)
 
 # Start the Flask app in a separate thread
 flask_thread = threading.Thread(target=start_flask_app)
 
 flask_thread.start()
+print("EEG server started on port 5000")
 
 flask_thread.join()
-
